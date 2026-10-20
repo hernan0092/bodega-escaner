@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bodega Escáner</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#1f4d3f">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --fondo:#f2f1ed;--panel:#fff;--tinta:#1c1b18;--tenue:#6f6c64;--linea:#ddd9d0;
+  --marca:#1f4d3f;--ok:#0c7a43;--alto:#b45309;--stop:#a4161a;--sombra:rgba(28,27,24,.08);
+  --display:'Archivo',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --fondo:#14160f;--panel:#1e211a;--tinta:#eceadf;--tenue:#9a978c;--linea:#323628;
+  --marca:#79c0a4;--ok:#2fa264;--alto:#d98324;--stop:#e05c5c;--sombra:rgba(0,0,0,.4);color-scheme:dark;}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--fondo);color:var(--tinta);font-family:var(--display);
+  padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px));
+  padding-block:env(safe-area-inset-top,0px) calc(28px + env(safe-area-inset-bottom,0px));
+  max-width:620px;margin-inline:auto;-webkit-text-size-adjust:100%}
+img{max-width:100%}
+[hidden]{display:none!important}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--fondo);
+  padding-block:12px 10px;border-bottom:1px solid var(--linea);display:flex;flex-direction:column;gap:10px}
+.marca{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.marca h1{font-size:14px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin:0;color:var(--marca)}
+.marca span{font-size:11px;color:var(--tenue);font-variant-numeric:tabular-nums}
+.listas{display:flex;gap:6px}
+.listas button{flex:1;min-width:0;font:600 12px/1.2 var(--display);letter-spacing:.05em;text-transform:uppercase;
+  padding:9px 6px;border:1px solid var(--linea);background:var(--panel);color:var(--tenue);border-radius:3px}
+.listas button[aria-pressed="true"]{background:var(--marca);border-color:var(--marca);color:var(--fondo)}
+
+#camara{margin-top:12px;border-radius:4px;overflow:hidden;background:#000;position:relative;aspect-ratio:4/3}
+#camara video{width:100%;height:100%;object-fit:cover;display:block}
+#mira{position:absolute;inset:22% 8%;border:3px solid rgba(255,255,255,.85);border-radius:6px;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.28)}
+
+.captura{display:flex;gap:8px;margin-top:12px}
+#codigo{flex:1;min-width:0;font:600 19px/1 var(--mono);letter-spacing:.04em;padding:14px 12px;
+  border:2px solid var(--marca);border-radius:3px;background:var(--panel);color:var(--tinta);text-transform:uppercase}
+#codigo::placeholder{font:500 14px/1 var(--display);letter-spacing:normal;color:var(--tenue)}
+.captura button{font:700 12px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;padding:0 16px;
+  border:none;border-radius:3px;background:var(--marca);color:var(--fondo)}
+
+.veredicto{margin-top:12px;border-radius:4px;padding:18px 16px;background:var(--panel);border:1px solid var(--linea);
+  box-shadow:0 1px 2px var(--sombra);min-height:112px;display:flex;flex-direction:column;justify-content:center;gap:5px}
+.veredicto[data-estado=ok]{background:var(--ok);border-color:var(--ok)}
+.veredicto[data-estado=alto]{background:var(--alto);border-color:var(--alto)}
+.veredicto[data-estado=stop]{background:var(--stop);border-color:var(--stop)}
+.veredicto[data-estado] .titulo,.veredicto[data-estado] .nota,.veredicto[data-estado] dl{color:#fff}
+.titulo{font-size:28px;font-weight:700;line-height:1.06;margin:0;color:var(--tenue);text-wrap:balance}
+.ubic{font:600 18px/1.2 var(--mono);margin:0;color:#fff}
+.nota{font-size:12.5px;margin:0;color:var(--tenue)}
+.veredicto dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:4px 0 0;font-size:12.5px;opacity:.92}
+.veredicto dt{font:600 10.5px/1.6 var(--display);letter-spacing:.07em;text-transform:uppercase}
+.veredicto dd{margin:0;font-family:var(--mono)}
+
+h2{font:700 11px/1.4 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--tenue);
+  margin:24px 0 8px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+h2 em{font:500 11px/1 var(--mono);font-style:normal;letter-spacing:0}
+.cifras{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--linea);
+  border:1px solid var(--linea);border-radius:4px;overflow:hidden}
+.cifras div{background:var(--panel);padding:10px 6px;text-align:center}
+.cifras b{display:block;font:600 20px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.cifras small{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--tenue)}
+ul.ubicaciones{list-style:none;margin:0;padding:0;border:1px solid var(--linea);border-radius:4px;
+  overflow:hidden;background:var(--panel)}
+ul.ubicaciones li{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:11px 12px;border-bottom:1px solid var(--linea);font-size:14px}
+ul.ubicaciones li:last-child{border-bottom:none}
+ul.ubicaciones li.lider{background:rgba(31,77,63,.09);font-weight:700}
+ul.ubicaciones .n{font:600 15px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--stop)}
+ul.ubicaciones .vacio{justify-content:center;color:var(--tenue);font-size:13px}
+.acciones{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.acciones button,.acciones label{flex:1 1 auto;min-width:138px;text-align:center;
+  font:600 12px/1.2 var(--display);letter-spacing:.05em;text-transform:uppercase;padding:11px 10px;
+  border:1px solid var(--linea);background:var(--panel);color:var(--tinta);border-radius:3px}
+.acciones .destacado{background:var(--marca);border-color:var(--marca);color:var(--fondo)}
+button,label.acc{cursor:pointer}
+.aviso{font-size:12px;line-height:1.55;color:var(--tenue);margin-top:10px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <h1>Bodega Escáner</h1>
+    <span id="sello">sin base cargada</span>
+  </div>
+  <div class="listas" role="group" aria-label="Lista de trabajo">
+    <button type="button" id="btnDespacho" aria-pressed="true">Despacho</button>
+    <button type="button" id="btnPlazos" aria-pressed="false">Plazos cumplidos</button>
+  </div>
+</header>
+
+<div id="camara" hidden>
+  <video id="video" playsinline muted></video>
+  <div id="mira"></div>
+</div>
+
+<div class="captura">
+  <input id="codigo" inputmode="text" autocomplete="off" autocapitalize="characters"
+         spellcheck="false" placeholder="Escanea o escribe el N° de envío">
+  <button type="button" id="btnBuscar">Buscar</button>
+</div>
+
+<div class="veredicto" id="veredicto">
+  <p class="titulo" id="titulo">Esperando envío</p>
+  <p class="nota" id="nota">Carga la base del día y aprieta Usar cámara.</p>
+  <p class="ubic" id="ubic" hidden></p>
+  <dl id="detalle" hidden></dl>
+</div>
+
+<div class="acciones">
+  <button type="button" id="btnCamara" class="destacado">Usar cámara</button>
+  <label class="acc" for="archivo">Cargar base</label>
+  <input id="archivo" type="file" accept=".json,.csv,.txt" hidden>
+  <button type="button" id="btnSonido">Sonido: sí</button>
+</div>
+
+<h2>Avance <em id="resumenPie"></em></h2>
+<div class="cifras">
+  <div><b id="cTotal">0</b><small id="lTotal">Por sacar</small></div>
+  <div><b id="cHechos">0</b><small>Sacados</small></div>
+  <div><b id="cFalta">0</b><small>Pendientes</small></div>
+</div>
+
+<h2>Ubicaciones por sacar <em id="contUbic"></em></h2>
+<ul class="ubicaciones" id="listaUbic"><li class="vacio">Sin base cargada</li></ul>
+
+<h2>Cierre de turno</h2>
+<div class="acciones">
+  <button type="button" id="btnReporte" class="destacado">Descargar reporte</button>
+  <button type="button" id="btnReiniciar">Reiniciar jornada</button>
+</div>
+<p class="aviso">Lo escaneado se guarda dentro del teléfono, también sin señal. El reporte sale en CSV con el resultado y la hora de cada envío, incluidos los que no estaban en la lista.</p>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const E = {
+  codigo:$('codigo'), titulo:$('titulo'), nota:$('nota'), ubic:$('ubic'), detalle:$('detalle'),
+  veredicto:$('veredicto'), listaUbic:$('listaUbic'), sello:$('sello'), contUbic:$('contUbic'),
+  cTotal:$('cTotal'), cHechos:$('cHechos'), cFalta:$('cFalta'), lTotal:$('lTotal'), resumenPie:$('resumenPie')
+};
+
+let lista = 'despacho';
+let base = { despacho:null, plazos:null };
+let marcas = { despacho:{}, plazos:{} };
+let registro = { despacho:[], plazos:[] };
+let sonido = true;
+let flujo = null, detector = null, buscando = false, ultimo = { cod:'', t:0 };
+
+/* ---------- almacenamiento ---------- */
+const guardar = () => {
+  try {
+    localStorage.setItem('bodega.marcas', JSON.stringify(marcas));
+    localStorage.setItem('bodega.registro', JSON.stringify(registro));
+    localStorage.setItem('bodega.base', JSON.stringify(base));
+    localStorage.setItem('bodega.sonido', sonido ? '1' : '0');
+  } catch (e) {}
+};
+const recuperar = () => {
+  try {
+    const m = localStorage.getItem('bodega.marcas'); if (m) marcas = JSON.parse(m);
+    const r = localStorage.getItem('bodega.registro'); if (r) registro = JSON.parse(r);
+    const b = localStorage.getItem('bodega.base'); if (b) base = JSON.parse(b);
+    sonido = localStorage.getItem('bodega.sonido') !== '0';
+  } catch (e) {}
+};
+
+/* ---------- sonido y vibración ---------- */
+let audio = null;
+function pitido(hz, ms, retraso) {
+  if (!sonido) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audio.currentTime + retraso / 1000;
+    const osc = audio.createOscillator(), vol = audio.createGain();
+    osc.frequency.value = hz; osc.type = 'square';
+    vol.gain.setValueAtTime(0.0001, t0);
+    vol.gain.exponentialRampToValueAtTime(0.25, t0 + 0.012);
+    vol.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+    osc.connect(vol).connect(audio.destination);
+    osc.start(t0); osc.stop(t0 + ms / 1000 + 0.02);
+  } catch (e) {}
+}
+function alarma(tipo) {
+  const v = n => { try { navigator.vibrate && navigator.vibrate(n); } catch (e) {} };
+  if (tipo === 'ok')    { pitido(1200,120,0); pitido(1600,160,140); v(80); }
+  if (tipo === 'alto')  { pitido(520,230,0);  pitido(520,230,280);  v([120,80,120]); }
+  if (tipo === 'stop')  { pitido(300,420,0);  v(350); }
+  if (tipo === 'repe')  { pitido(760,110,0);  pitido(760,110,160);  v(60); }
+  if (tipo === 'listo') { [900,1200,1600,2000].forEach((f,i)=>pitido(f, i===3?380:150, i*160)); v([100,60,100,60,200]); }
+}
+
+/* ---------- utilidades ---------- */
+const normalizar = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const hora = d => d.toLocaleString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+const B = () => base[lista];
+
+/* ---------- pintar ---------- */
+function pintarVeredicto(estado, titulo, nota, ubicacion, filas) {
+  if (estado) E.veredicto.dataset.estado = estado; else delete E.veredicto.dataset.estado;
+  E.titulo.textContent = titulo;
+  E.nota.textContent = nota || '';
+  E.nota.hidden = !nota;
+  E.ubic.textContent = ubicacion || '';
+  E.ubic.hidden = !ubicacion;
+  E.detalle.innerHTML = '';
+  E.detalle.hidden = !filas || !filas.length;
+  (filas || []).forEach(([k, v]) => {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = k; dd.textContent = v;
+    E.detalle.append(dt, dd);
+  });
+}
+
+function pendientesPorUbicacion() {
+  const b = B(); if (!b) return [];
+  const m = marcas[lista], cuenta = new Map();
+  b.it.forEach(it => {
+    if (it[2] !== 1) return;
+    if (m[it[0]]) return;
+    const u = b.ub[it[1]] || '(sin ubicación)';
+    cuenta.set(u, (cuenta.get(u) || 0) + 1);
+  });
+  return [...cuenta.entries()].sort((a, b2) => b2[1] - a[1]);
+}
+
+function pintarPanel() {
+  const b = B();
+  E.lTotal.textContent = lista === 'despacho' ? 'A domicilio' : 'Plazo cumplido';
+  if (!b) {
+    E.sello.textContent = 'sin base cargada';
+    E.cTotal.textContent = E.cHechos.textContent = E.cFalta.textContent = '0';
+    E.listaUbic.innerHTML = '<li class="vacio">Sin base cargada</li>';
+    E.contUbic.textContent = ''; E.resumenPie.textContent = '';
+    return;
+  }
+  const m = marcas[lista];
+  const sacables = b.it.filter(it => it[2] === 1);
+  const hechos = sacables.filter(it => m[it[0]]).length;
+  E.cTotal.textContent = sacables.length;
+  E.cHechos.textContent = hechos;
+  E.cFalta.textContent = sacables.length - hechos;
+  E.sello.textContent = b.it.length + ' envíos · ' + (b.fecha || 'base cargada');
+  E.resumenPie.textContent = registro[lista].length + ' escaneos';
+
+  const pend = pendientesPorUbicacion();
+  E.contUbic.textContent = pend.length ? pend.length + ' ubicaciones' : '';
+  if (!pend.length) {
+    E.listaUbic.innerHTML = '<li class="vacio">Todo listo: no quedan envíos por sacar</li>';
+    return;
+  }
+  E.listaUbic.innerHTML = '';
+  pend.slice(0, 25).forEach(([u, n], i) => {
+    const li = document.createElement('li');
+    if (i === 0) li.className = 'lider';
+    const a = document.createElement('span'); a.textContent = u;
+    const c = document.createElement('span'); c.className = 'n'; c.textContent = n;
+    li.append(a, c); E.listaUbic.append(li);
+  });
+  if (pend.length > 25) {
+    const li = document.createElement('li'); li.className = 'vacio';
+    li.textContent = 'y ' + (pend.length - 25) + ' ubicaciones más';
+    E.listaUbic.append(li);
+  }
+}
+
+/* ---------- búsqueda ---------- */
+function buscar(entrada) {
+  const cod = normalizar(entrada);
+  E.codigo.value = '';
+  if (!flujo) E.codigo.focus();   // escáner USB/OTG: el foco vuelve solo al campo
+  if (!cod) return;
+  const b = B();
+  if (!b) { pintarVeredicto('stop', 'Falta la base', 'Pulsa Cargar base y elige el archivo del día.'); alarma('stop'); return; }
+
+  const it = b.it.find(x => x[0] === cod);
+  const ahora = new Date();
+
+  if (!it) {
+    registro[lista].push({ cod, res: 'NO ESTA EN LA LISTA', ubic: '', t: ahora.toISOString() });
+    pintarVeredicto('stop', 'No está en la lista', 'Este envío no figura en el reporte: queda donde está.', '', [['Envío', cod]]);
+    alarma('stop'); guardar(); pintarPanel(); return;
+  }
+
+  const ubicacion = b.ub[it[1]] || '(sin ubicación)';
+  const detalle = [['Envío', cod]];
+  if (it[3]) detalle.push([lista === 'despacho' ? 'Estado FIVPS' : 'Observación', it[3]]);
+  if (it[4]) detalle.push([lista === 'despacho' ? 'N° bodega' : 'N° bodegaje', it[4]]);
+
+  if (it[2] !== 1) {
+    const yaRev = marcas[lista][cod];
+    if (!yaRev) {
+      marcas[lista][cod] = { t: ahora.toISOString(), tipo: 'aviso' };
+      registro[lista].push({ cod, res: 'PENDIENTE DE AVISO', ubic: ubicacion, t: ahora.toISOString() });
+    }
+    pintarVeredicto('alto', 'Pendiente de aviso',
+      yaRev ? 'Ya se había revisado el ' + hora(new Date(yaRev.t)) + '. Queda en bodega.' : 'No se despacha: queda en bodega.',
+      ubicacion, detalle);
+    alarma('alto'); guardar(); pintarPanel(); return;
+  }
+
+  const titulo = lista === 'despacho' ? 'A domicilio' : 'Plazo cumplido';
+  const ya = marcas[lista][cod];
+  if (ya) {
+    pintarVeredicto('alto', titulo + ' (ya registrado)', 'Se había sacado el ' + hora(new Date(ya.t)) + '.', ubicacion, detalle);
+    alarma('repe'); return;
+  }
+
+  marcas[lista][cod] = { t: ahora.toISOString(), tipo: 'sale' };
+  registro[lista].push({ cod, res: titulo.toUpperCase(), ubic: ubicacion, t: ahora.toISOString() });
+  guardar();
+
+  const quedan = b.it.filter(x => x[2] === 1 && x[1] === it[1] && !marcas[lista][x[0]]).length;
+  if (quedan === 0) {
+    pintarVeredicto('ok', titulo + ' · Ubicación lista', 'No quedan envíos por sacar en esta ubicación.', ubicacion, detalle);
+    alarma('listo');
+  } else {
+    pintarVeredicto('ok', titulo, 'Quedan ' + quedan + ' en esta ubicación.', ubicacion, detalle);
+    alarma('ok');
+  }
+  pintarPanel();
+}
+
+/* ---------- cámara ---------- */
+async function abrirCamara() {
+  if (flujo) { cerrarCamara(); return; }
+  if (!('BarcodeDetector' in window)) {
+    pintarVeredicto('alto', 'Cámara no disponible',
+      'Este navegador no trae lector de códigos. Usa Chrome en Android, un escáner USB con adaptador OTG, o escribe el número.');
+    return;
+  }
+  try {
+    detector = detector || new window.BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'qr_code', 'itf', 'codabar'] });
+    flujo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } });
+    const v = $('video');
+    v.srcObject = flujo; await v.play();
+    $('camara').hidden = false;
+    $('btnCamara').textContent = 'Apagar cámara';
+    leer();
+  } catch (e) {
+    pintarVeredicto('stop', 'No se pudo abrir la cámara', 'Revisa el permiso de cámara del navegador y vuelve a intentar.');
+  }
+}
+function cerrarCamara() {
+  if (flujo) flujo.getTracks().forEach(t => t.stop());
+  flujo = null; $('camara').hidden = true; $('btnCamara').textContent = 'Usar cámara';
+}
+async function leer() {
+  if (!flujo) return;
+  if (!buscando) {
+    buscando = true;
+    try {
+      const cs = await detector.detect($('video'));
+      if (cs.length) {
+        const cod = normalizar(cs[0].rawValue);
+        const t = Date.now();
+        if (cod && (cod !== ultimo.cod || t - ultimo.t > 2500)) {
+          ultimo = { cod, t };
+          buscar(cod);
+        }
+      }
+    } catch (e) {}
+    buscando = false;
+  }
+  setTimeout(() => requestAnimationFrame(leer), 180);
+}
+
+/* ---------- base ---------- */
+function cargarTexto(txt, nombre) {
+  let d = null;
+  try { d = JSON.parse(txt); } catch (e) { d = csv(txt); }
+  if (!d) { pintarVeredicto('stop', 'Archivo no reconocido', 'Usa el .json de la jornada o un CSV con envío, ubicación y acción.'); return; }
+  if (d.despacho || d.plazos) { if (d.despacho) base.despacho = d.despacho; if (d.plazos) base.plazos = d.plazos; }
+  else base[lista] = d;
+  [base.despacho, base.plazos].forEach(b => { if (b && !b.fecha) b.fecha = nombre.replace(/\.(json|csv|txt)$/i, ''); });
+  guardar(); pintarPanel();
+  pintarVeredicto(null, 'Base cargada', (B() ? B().it.length : 0) + ' envíos listos para escanear.');
+}
+function csv(txt) {
+  const li = txt.trim().split(/\r?\n/); if (li.length < 2) return null;
+  const sep = (li[0].match(/;/g) || []).length > (li[0].match(/,/g) || []).length ? ';' : ',';
+  const ub = [], idx = {}, it = [];
+  for (let i = 1; i < li.length; i++) {
+    const c = li[i].split(sep).map(s => s.trim().replace(/^"|"$/g, ''));
+    const cod = normalizar(c[0]); if (!cod) continue;
+    const u = (c[1] || '').toUpperCase();
+    if (!(u in idx)) { idx[u] = ub.length; ub.push(u); }
+    const acc = c[2] ? (/DOMICILIO|CUMPLIDO|SI|SACAR/i.test(c[2]) ? 1 : 0) : 1;
+    it.push([cod, idx[u], acc, c[3] || '', c[4] || '']);
+  }
+  return it.length ? { ub, it } : null;
+}
+
+/* ---------- reporte ---------- */
+function reporte() {
+  const regs = registro[lista];
+  if (!regs.length) { pintarVeredicto('alto', 'Nada que reportar', 'Todavía no hay envíos escaneados en esta lista.'); return; }
+  const filas = [['FECHA/HORA', 'N° ENVIO', 'RESULTADO', 'UBICACION']];
+  regs.forEach(r => filas.push([hora(new Date(r.t)), r.cod, r.res, r.ubic]));
+  const txt = '﻿' + filas.map(f => f.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'reporte_' + lista + '_' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.csv';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  pintarVeredicto(null, 'Reporte descargado', regs.length + ' escaneos guardados en el archivo CSV.');
+}
+
+/* ---------- eventos ---------- */
+$('btnBuscar').addEventListener('click', () => buscar(E.codigo.value));
+E.codigo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); buscar(E.codigo.value); } });
+$('btnCamara').addEventListener('click', abrirCamara);
+$('btnSonido').addEventListener('click', e => {
+  sonido = !sonido; e.target.textContent = 'Sonido: ' + (sonido ? 'sí' : 'no');
+  guardar(); if (sonido) alarma('ok');
+});
+$('archivo').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => cargarTexto(String(fr.result), f.name);
+  fr.readAsText(f, 'utf-8');
+  e.target.value = '';
+});
+$('btnReporte').addEventListener('click', reporte);
+$('btnReiniciar').addEventListener('click', () => {
+  if (E.titulo.textContent !== 'Confirma el reinicio') {
+    pintarVeredicto('alto', 'Confirma el reinicio', 'Vuelve a pulsar Reiniciar jornada para borrar lo escaneado de esta lista.');
+    return;
+  }
+  marcas[lista] = {}; registro[lista] = []; guardar(); pintarPanel();
+  pintarVeredicto(null, 'Jornada reiniciada', 'Todos los envíos de esta lista vuelven a quedar pendientes.');
+});
+function elegir(l) {
+  lista = l;
+  $('btnDespacho').setAttribute('aria-pressed', String(l === 'despacho'));
+  $('btnPlazos').setAttribute('aria-pressed', String(l === 'plazos'));
+  pintarPanel();
+  pintarVeredicto(null, l === 'despacho' ? 'Lista de despacho' : 'Lista de plazos cumplidos', 'Escanea el siguiente envío.');
+  try { localStorage.setItem('bodega.lista', l); } catch (e) {}
+}
+$('btnDespacho').addEventListener('click', () => elegir('despacho'));
+$('btnPlazos').addEventListener('click', () => elegir('plazos'));
+
+recuperar();
+try { const l = localStorage.getItem('bodega.lista'); if (l) lista = l; } catch (e) {}
+$('btnSonido').textContent = 'Sonido: ' + (sonido ? 'sí' : 'no');
+elegir(lista);
+if (B()) pintarVeredicto(null, 'Listo para escanear', 'Aprieta Usar cámara o escribe el número de envío.');
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "Bodega Escáner",
+  "short_name": "Bodega",
+  "description": "Verificación de envíos en bodega: plazos cumplidos y despacho a domicilio.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14160f",
+  "theme_color": "#1f4d3f",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
