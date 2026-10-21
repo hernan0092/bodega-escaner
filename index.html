@@ -35,17 +35,28 @@ header span{font-size:11px;color:var(--tenue);font-variant-numeric:tabular-nums;
 #mira{position:absolute;inset:22% 8%;border:3px solid rgba(255,255,255,.85);border-radius:6px;
   box-shadow:0 0 0 2000px rgba(0,0,0,.3)}
 
-#banda{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(14px + 44px);
-  background:rgba(20,22,15,.86);color:#fff;display:none;flex-direction:column;gap:2px}
-#banda.ver{display:flex}
-#banda[data-tono="dom"],#banda[data-tono="ok"]{background:rgba(12,122,67,.94)}
-#banda[data-tono="plazo"]{background:rgba(11,110,143,.94)}
-#banda[data-tono="listo"]{background:rgba(19,80,91,.95)}
-#banda[data-tono="alto"],#banda[data-tono="ojo"]{background:rgba(180,83,9,.94)}
-#banda[data-tono="stop"],#banda[data-tono="nulo"]{background:rgba(164,22,26,.94)}
-#banda .bAccion{font:700 25px/1.08 var(--display);margin:0;text-wrap:balance}
-#banda .bUbic{font:600 15px/1.2 var(--mono);margin:0;opacity:.95}
-#banda .bRef{font:500 11.5px/1.2 var(--mono);margin:0;opacity:.75}
+#camara[data-tono]{box-shadow:inset 0 0 0 7px var(--marcoColor)}
+#camara[data-tono="dom"],#camara[data-tono="ok"]{--marcoColor:#0c7a43}
+#camara[data-tono="plazo"]{--marcoColor:#0b6e8f}
+#camara[data-tono="listo"]{--marcoColor:#13505b}
+#camara[data-tono="alto"],#camara[data-tono="ojo"]{--marcoColor:#b45309}
+#camara[data-tono="stop"],#camara[data-tono="nulo"]{--marcoColor:#a4161a}
+#camara[data-tono="fivps"]{--marcoColor:#7f1d1d}
+#camara[data-tono="libre"]{--marcoColor:#d98b6a}
+#camara[data-tono="c2c"]{--marcoColor:#c75146}
+#camara[data-tono="aforo"]{--marcoColor:#5c1a2e}
+#camara[data-tono="carta"],#camara[data-tono="otro"]{--marcoColor:#a4161a}
+#camara[data-tono] #mira{border-color:var(--marcoColor)}
+
+#navAviso{margin-top:12px;border:2px solid var(--stop);border-radius:4px;background:var(--panel);
+  padding:14px;display:none;flex-direction:column;gap:8px}
+#navAviso.ver{display:flex}
+#navAviso b{font:700 15px/1.3 var(--display);color:var(--stop)}
+#navAviso p{margin:0;font-size:13px;line-height:1.5}
+#navAviso .dir{font:600 12.5px/1.4 var(--mono);background:var(--fondo);padding:8px;border-radius:3px;
+  word-break:break-all;border:1px solid var(--linea)}
+#navAviso button{align-self:flex-start;font:600 12px/1 var(--display);letter-spacing:.05em;text-transform:uppercase;
+  padding:10px 14px;border:none;border-radius:3px;background:var(--marca);color:#fff;cursor:pointer}
 #controlesCam{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center}
 #controlesCam button{font:700 13px/1 var(--display);padding:9px 12px;border-radius:3px;border:none;
   background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
@@ -138,11 +149,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-
 <div id="camara" hidden>
   <video id="video" playsinline muted></video>
   <div id="mira"></div>
-  <div id="banda">
-    <p class="bAccion" id="bAccion"></p>
-    <p class="bUbic" id="bUbic"></p>
-    <p class="bRef" id="bRef"></p>
-  </div>
   <div id="controlesCam">
     <button type="button" id="btnLinterna" hidden>Linterna</button>
     <span id="zoomCaja" hidden>
@@ -151,6 +157,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-
       <button type="button" id="btnZoomMas">+</button>
     </span>
   </div>
+</div>
+
+
+<div id="navAviso">
+  <b>Este navegador no puede leer códigos</b>
+  <p>La cámara solo funciona en <b>Chrome</b>. Abre esta dirección en Chrome para escanear. Mientras tanto, puedes escribir el número a mano y el buscador responde igual.</p>
+  <span class="dir" id="navDir"></span>
+  <button type="button" id="navCopiar">Copiar dirección</button>
 </div>
 
 <div class="captura">
@@ -295,15 +309,11 @@ async function cargarVoz() {
 const decir = clave => PRONUNCIA[clave] || clave.toLowerCase();
 
 /* ---------- pantalla ---------- */
-function pintarBanda(tono, titulo, sub, referencia) {
-  const b = document.getElementById('banda');
-  if (!b) return;
-  if (!flujo) { b.classList.remove('ver'); return; }
-  if (tono) b.dataset.tono = tono; else delete b.dataset.tono;
-  document.getElementById('bAccion').textContent = titulo || '';
-  document.getElementById('bUbic').textContent = sub || '';
-  document.getElementById('bRef').textContent = referencia || '';
-  b.classList.add('ver');
+function pintarBanda(tono) {
+  const c = document.getElementById('camara');
+  if (!c) return;
+  if (!flujo) { delete c.dataset.tono; return; }
+  if (tono) c.dataset.tono = tono; else delete c.dataset.tono;
 }
 function mostrar(tono, accion, nota, ubicacion, referencia, filas) {
   const v = $('veredicto');
@@ -317,7 +327,7 @@ function mostrar(tono, accion, nota, ubicacion, referencia, filas) {
     const dt = document.createElement('dt'), dd = document.createElement('dd');
     dt.textContent = k; dd.textContent = val; dl.append(dt, dd);
   });
-  pintarBanda(tono, accion, ubicacion || nota, referencia);
+  pintarBanda(tono);
 }
 function cuantas() { return base && base.it ? base.it.length : 0; }
 function sello() {
@@ -571,6 +581,32 @@ if (DIAG) {
   }, 1000);
 }
 
+
+/* ---------- aviso de navegador sin lector ---------- */
+function revisarNavegador() {
+  if ('BarcodeDetector' in window) return;
+  const c = document.getElementById('navAviso');
+  const movil = navigator.maxTouchPoints > 1 || /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (!movil) {
+    c.querySelector('b').textContent = 'Desde el computador no se puede escanear';
+    c.querySelector('p').innerHTML = 'La cámara del buscador funciona en <b>Chrome en el teléfono</b>. ' +
+      'Acá puedes escribir el número a mano y el buscador responde igual.';
+  }
+  document.getElementById('navDir').textContent = location.origin + location.pathname;
+  c.classList.add('ver');
+  document.getElementById('navCopiar').addEventListener('click', async e => {
+    try {
+      await navigator.clipboard.writeText(location.origin + location.pathname);
+      e.target.textContent = 'Dirección copiada';
+    } catch (err) {
+      const r = document.createRange();
+      r.selectNodeContents(document.getElementById('navDir'));
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      e.target.textContent = 'Copia el texto marcado';
+    }
+  });
+}
+
 /* ---------- cámara ---------- */
 let pista = null, lienzo = null, ctx2d = null, zoomActual = 1;
 
@@ -704,6 +740,7 @@ $('btnReiniciar').addEventListener('click', () => {
   $('btnSonido').textContent = 'Sonido: ' + (sonido ? 'sí' : 'no');
   prepararVoz();
   try { speechSynthesis.addEventListener('voiceschanged', prepararVoz); } catch (e) {}
+  revisarNavegador();
   await cargarZona();
   cargarVoz();
   vigilarUbicacion();
