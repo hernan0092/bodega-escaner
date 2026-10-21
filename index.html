@@ -34,6 +34,11 @@ header span{font-size:11px;color:var(--tenue);font-variant-numeric:tabular-nums;
 #camara video{width:100%;height:100%;object-fit:cover;display:block}
 #mira{position:absolute;inset:22% 8%;border:3px solid rgba(255,255,255,.85);border-radius:6px;
   box-shadow:0 0 0 2000px rgba(0,0,0,.3)}
+#controlesCam{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center}
+#controlesCam button{font:700 13px/1 var(--display);padding:9px 12px;border-radius:3px;border:none;
+  background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
+#controlesCam button[data-on="1"]{background:#f0c040;color:#1c1b18}
+#zoomNivel{font:600 12px/1 var(--mono);color:#fff;background:rgba(0,0,0,.6);padding:9px 8px;border-radius:3px}
 
 .captura{display:flex;gap:8px;margin-top:12px}
 #codigo{flex:1;min-width:0;font:600 19px/1 var(--mono);letter-spacing:.04em;padding:14px 12px;
@@ -112,6 +117,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-
 <div id="camara" hidden>
   <video id="video" playsinline muted></video>
   <div id="mira"></div>
+  <div id="controlesCam">
+    <button type="button" id="btnLinterna" hidden>Linterna</button>
+    <span id="zoomCaja" hidden>
+      <button type="button" id="btnZoomMenos">−</button>
+      <span id="zoomNivel">2.0×</span>
+      <button type="button" id="btnZoomMas">+</button>
+    </span>
+  </div>
 </div>
 
 <div class="captura">
@@ -161,7 +174,7 @@ const TONOS = { 'A DOMICILIO':'dom', 'PLAZO CUMPLIDO':'plazo', 'PENDIENTE DE AVI
 const SACAR = { 'A DOMICILIO':1, 'PLAZO CUMPLIDO':1 };     // las acciones que mueven envío
 let PRONUNCIA = { 'A DOMICILIO':'a domicilio', 'PLAZO CUMPLIDO':'plazo cumplido',
                   'PENDIENTE DE AVISO':'pendiente de aviso', 'NO ESTA EN LA LISTA':'no está en la lista',
-                  'YA REGISTRADO':'ya registrado', 'UBICACION LISTA':'ubicación lista' };
+                  'UBICACION LISTA':'ubicación lista' };
 
 const normalizar = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const hora = d => d.toLocaleString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -356,22 +369,19 @@ function buscar(entrada) {
   }
 
   const ya = marcas[cod];
-  if (ya) {
-    mostrar('alto', accion + ' (ya registrado)', 'Se sacó el ' + hora(new Date(ya.t)) + '.', ubicacion, cod, filas);
-    alarma('ojo', decir('YA REGISTRADO'));
-    return;
+  const notaRepetido = ya ? 'Ya se había sacado el ' + hora(new Date(ya.t)) + '. ' : '';
+  if (!ya) {
+    marcas[cod] = { t: ahora.toISOString(), tipo:'sale' };
+    registro.push({ cod, res: accion, ubic: ubicacion, t: ahora.toISOString() });
+    guardarLocal();
   }
-
-  marcas[cod] = { t: ahora.toISOString(), tipo:'sale' };
-  registro.push({ cod, res: accion, ubic: ubicacion, t: ahora.toISOString() });
-  guardarLocal();
 
   const quedan = base.it.filter(x => hayQueSacar(x) && x[1] === it[1] && !marcas[x[0]]).length;
   if (quedan === 0) {
-    mostrar('listo', accion + ' · Ubicación lista', 'No quedan envíos por sacar en esta ubicación.', ubicacion, cod, filas);
+    mostrar('listo', accion + ' · Ubicación lista', notaRepetido + 'No quedan envíos por sacar en esta ubicación.', ubicacion, cod, filas);
     alarma('listo', decir(accion) + '. ' + decir('UBICACION LISTA'));
   } else {
-    mostrar(TONOS[accion] || 'dom', accion, 'Quedan ' + quedan + ' por sacar en esta ubicación.', ubicacion, cod, filas);
+    mostrar(TONOS[accion] || 'dom', accion, notaRepetido + 'Quedan ' + quedan + ' por sacar en esta ubicación.', ubicacion, cod, filas);
     alarma('ok', decir(accion));
   }
   pintarPanel();
@@ -492,6 +502,14 @@ function vigilarUbicacion() {
 }
 
 /* ---------- cámara ---------- */
+let pista = null, lienzo = null, ctx2d = null, zoomActual = 1;
+
+function soporta(nombre) {
+  try { return pista && (pista.getCapabilities() || {})[nombre]; } catch (e) { return null; }
+}
+async function aplicar(ajuste) {
+  try { await pista.applyConstraints({ advanced: [ajuste] }); return true; } catch (e) { return false; }
+}
 async function abrirCamara() {
   if (flujo) { cerrarCamara(); return; }
   if (!('BarcodeDetector' in window)) {
@@ -500,8 +518,26 @@ async function abrirCamara() {
     return;
   }
   try {
-    detector = detector || new window.BarcodeDetector({ formats:['code_128','code_39','ean_13','qr_code','itf','codabar'] });
-    flujo = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ ideal:1280 } } });
+    detector = detector || new window.BarcodeDetector({ formats:['code_128','code_39','itf','ean_13','qr_code'] });
+    flujo = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' }]
+      }
+    });
+    pista = flujo.getVideoTracks()[0];
+    await aplicar({ focusMode: 'continuous' });
+
+    const z = soporta('zoom');
+    if (z) {
+      zoomActual = Math.min(z.max, Math.max(z.min, 2));
+      await aplicar({ zoom: zoomActual });
+      $('zoomCaja').hidden = false;
+    }
+    $('btnLinterna').hidden = !soporta('torch');
+
     const v = $('video'); v.srcObject = flujo; await v.play();
     $('camara').hidden = false; $('btnCamara').textContent = 'Apagar cámara';
     leer();
@@ -511,28 +547,64 @@ async function abrirCamara() {
 }
 function cerrarCamara() {
   if (flujo) flujo.getTracks().forEach(t => t.stop());
-  flujo = null; $('camara').hidden = true; $('btnCamara').textContent = 'Usar cámara';
+  flujo = null; pista = null;
+  $('camara').hidden = true; $('btnCamara').textContent = 'Usar cámara';
+  $('zoomCaja').hidden = true; $('btnLinterna').hidden = true;
+  $('btnLinterna').dataset.on = '';
 }
+async function cambiarZoom(paso) {
+  const z = soporta('zoom'); if (!z) return;
+  zoomActual = Math.min(z.max, Math.max(z.min, zoomActual + paso * (z.step || 0.5)));
+  await aplicar({ zoom: zoomActual });
+  $('zoomNivel').textContent = zoomActual.toFixed(1) + '×';
+}
+async function alternarLinterna() {
+  if (!soporta('torch')) return;
+  const on = $('btnLinterna').dataset.on === '1';
+  if (await aplicar({ torch: !on })) {
+    $('btnLinterna').dataset.on = on ? '' : '1';
+    $('btnLinterna').textContent = on ? 'Linterna' : 'Linterna ON';
+  }
+}
+
+/* Detecta solo dentro del recuadro: más rápido y evita leer códigos vecinos. */
 async function leer() {
   if (!flujo) return;
   if (!ocupado) {
     ocupado = true;
     try {
-      const cs = await detector.detect($('video'));
+      const v = $('video');
+      let fuente = v;
+      if (v.videoWidth) {
+        lienzo = lienzo || document.createElement('canvas');
+        ctx2d = ctx2d || lienzo.getContext('2d', { willReadFrequently: true });
+        const w = Math.round(v.videoWidth * 0.84), h = Math.round(v.videoHeight * 0.56);
+        const x = Math.round((v.videoWidth - w) / 2), y = Math.round((v.videoHeight - h) / 2);
+        if (lienzo.width !== w) { lienzo.width = w; lienzo.height = h; }
+        ctx2d.drawImage(v, x, y, w, h, 0, 0, w, h);
+        fuente = lienzo;
+      }
+      const cs = await detector.detect(fuente);
       if (cs.length) {
         const cod = normalizar(cs[0].rawValue), t = Date.now();
-        if (cod && (cod !== ultimo.cod || t - ultimo.t > 2500)) { ultimo = { cod, t }; buscar(cod); }
+        if (cod.length >= 8 && (cod !== ultimo.cod || t - ultimo.t > 2500)) {
+          ultimo = { cod, t };
+          buscar(cod);
+        }
       }
     } catch (e) {}
     ocupado = false;
   }
-  setTimeout(() => requestAnimationFrame(leer), 180);
+  setTimeout(() => requestAnimationFrame(leer), 70);
 }
 
 /* ---------- eventos ---------- */
 $('btnBuscar').addEventListener('click', () => buscar($('codigo').value));
 $('codigo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); buscar($('codigo').value); } });
 $('btnCamara').addEventListener('click', abrirCamara);
+$('btnZoomMas').addEventListener('click', () => cambiarZoom(2));
+$('btnZoomMenos').addEventListener('click', () => cambiarZoom(-2));
+$('btnLinterna').addEventListener('click', alternarLinterna);
 $('btnActualizar').addEventListener('click', () => bajarBase(true, true));
 $('btnSonido').addEventListener('click', e => {
   sonido = !sonido; e.target.textContent = 'Sonido: ' + (sonido ? 'sí' : 'no');
