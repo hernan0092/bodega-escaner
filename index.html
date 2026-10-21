@@ -34,6 +34,18 @@ header span{font-size:11px;color:var(--tenue);font-variant-numeric:tabular-nums;
 #camara video{width:100%;height:100%;object-fit:cover;display:block}
 #mira{position:absolute;inset:22% 8%;border:3px solid rgba(255,255,255,.85);border-radius:6px;
   box-shadow:0 0 0 2000px rgba(0,0,0,.3)}
+
+#banda{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(14px + 44px);
+  background:rgba(20,22,15,.86);color:#fff;display:none;flex-direction:column;gap:2px}
+#banda.ver{display:flex}
+#banda[data-tono="dom"],#banda[data-tono="ok"]{background:rgba(12,122,67,.94)}
+#banda[data-tono="plazo"]{background:rgba(11,110,143,.94)}
+#banda[data-tono="listo"]{background:rgba(19,80,91,.95)}
+#banda[data-tono="alto"],#banda[data-tono="ojo"]{background:rgba(180,83,9,.94)}
+#banda[data-tono="stop"],#banda[data-tono="nulo"]{background:rgba(164,22,26,.94)}
+#banda .bAccion{font:700 25px/1.08 var(--display);margin:0;text-wrap:balance}
+#banda .bUbic{font:600 15px/1.2 var(--mono);margin:0;opacity:.95}
+#banda .bRef{font:500 11.5px/1.2 var(--mono);margin:0;opacity:.75}
 #controlesCam{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center}
 #controlesCam button{font:700 13px/1 var(--display);padding:9px 12px;border-radius:3px;border:none;
   background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
@@ -89,6 +101,15 @@ ul.ubicaciones .vacio{justify-content:center;color:var(--tenue);font-size:13px}
 .acciones .destacado{background:var(--marca);border-color:var(--marca);color:#fff}
 .aviso{font-size:12px;line-height:1.55;color:var(--tenue);margin-top:10px}
 button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+#diag{margin-top:10px;border:1px solid var(--linea);border-radius:4px;background:var(--panel);padding:10px 12px}
+#diag h3{font:700 10px/1.4 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--tenue);margin:0 0 6px;
+  display:flex;justify-content:space-between}
+#diag ol{list-style:none;margin:0;padding:0;font:500 11.5px/1.5 var(--mono);max-height:190px;overflow-y:auto}
+#diag li{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--linea);padding:3px 0}
+#diag li:last-child{border-bottom:none}
+#diag .si{color:#0c7a43;font-weight:600}
+#diag .no{color:#a4161a;font-weight:600}
+#diag .fmt{color:var(--tenue);font-size:10.5px}
 #cerco{position:fixed;inset:0;z-index:50;background:var(--marca);color:#fff;display:flex;align-items:center;
   justify-content:center;text-align:center;padding:32px max(24px,env(safe-area-inset-left,0px))}
 #cerco .cercoTitulo{font-size:30px;font-weight:700;line-height:1.1;margin:0 0 10px}
@@ -117,6 +138,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-
 <div id="camara" hidden>
   <video id="video" playsinline muted></video>
   <div id="mira"></div>
+  <div id="banda">
+    <p class="bAccion" id="bAccion"></p>
+    <p class="bUbic" id="bUbic"></p>
+    <p class="bRef" id="bRef"></p>
+  </div>
   <div id="controlesCam">
     <button type="button" id="btnLinterna" hidden>Linterna</button>
     <span id="zoomCaja" hidden>
@@ -164,6 +190,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--marca);outline-
 </div>
 <p class="aviso">El reporte sale en CSV con la hora, el envío, qué correspondía hacer y la ubicación, incluidos los que no estaban en la lista. Al abrir, el buscador revisa si hay base nueva; si no la hay, no descarga nada.</p>
 
+<div id="diag" hidden>
+  <h3><span>Diagnóstico de lectura</span><span id="diagFps">0 lecturas/s</span></h3>
+  <ol id="diagLista"></ol>
+</div>
+
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -173,7 +204,7 @@ let flujo = null, detector = null, ocupado = false, ultimo = { cod:'', t:0 };
 const TONOS = { 'A DOMICILIO':'dom', 'PLAZO CUMPLIDO':'plazo', 'PENDIENTE DE AVISO':'alto' };
 const SACAR = { 'A DOMICILIO':1, 'PLAZO CUMPLIDO':1 };     // las acciones que mueven envío
 let PRONUNCIA = { 'A DOMICILIO':'a domicilio', 'PLAZO CUMPLIDO':'plazo cumplido',
-                  'PENDIENTE DE AVISO':'pendiente de aviso', 'NO ESTA EN LA LISTA':'no está en la lista',
+                  'PENDIENTE DE AVISO':'pendiente de aviso', 'FUERA DE BASE':'fuera de base',
                   'UBICACION LISTA':'ubicación lista' };
 
 const normalizar = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -264,6 +295,16 @@ async function cargarVoz() {
 const decir = clave => PRONUNCIA[clave] || clave.toLowerCase();
 
 /* ---------- pantalla ---------- */
+function pintarBanda(tono, titulo, sub, referencia) {
+  const b = document.getElementById('banda');
+  if (!b) return;
+  if (!flujo) { b.classList.remove('ver'); return; }
+  if (tono) b.dataset.tono = tono; else delete b.dataset.tono;
+  document.getElementById('bAccion').textContent = titulo || '';
+  document.getElementById('bUbic').textContent = sub || '';
+  document.getElementById('bRef').textContent = referencia || '';
+  b.classList.add('ver');
+}
 function mostrar(tono, accion, nota, ubicacion, referencia, filas) {
   const v = $('veredicto');
   if (tono) v.dataset.tono = tono; else delete v.dataset.tono;
@@ -276,6 +317,7 @@ function mostrar(tono, accion, nota, ubicacion, referencia, filas) {
     const dt = document.createElement('dt'), dd = document.createElement('dd');
     dt.textContent = k; dd.textContent = val; dl.append(dt, dd);
   });
+  pintarBanda(tono, accion, ubicacion || nota, referencia);
 }
 function cuantas() { return base && base.it ? base.it.length : 0; }
 function sello() {
@@ -342,9 +384,9 @@ function buscar(entrada) {
   const i = mapa.get(cod);
 
   if (i === undefined) {
-    registro.push({ cod, res:'NO ESTA EN LA LISTA', ubic:'', t: ahora.toISOString() });
-    mostrar('stop', 'No está en la lista', 'Este envío no figura en el reporte: queda donde está.', '', cod);
-    alarma('nulo', decir('NO ESTA EN LA LISTA'));
+    registro.push({ cod, res:'FUERA DE BASE', ubic:'', t: ahora.toISOString() });
+    mostrar('stop', 'FUERA DE BASE', 'Este envío no está en el reporte de bodega: queda donde está.', '', cod);
+    alarma('nulo', decir('FUERA DE BASE'));
     guardarLocal(); pintarPanel(); return;
   }
 
@@ -501,6 +543,34 @@ function vigilarUbicacion() {
   }, { enableHighAccuracy:true, maximumAge:30000, timeout:25000 });
 }
 
+
+/* ---------- diagnóstico (solo con ?diag en la dirección) ---------- */
+const DIAG = location.search.indexOf('diag') >= 0;
+let diagIntentos = 0, diagDetecciones = [];
+function diagTic() {
+  if (!DIAG) return;
+  diagIntentos++;
+}
+function diagAnota(valor, formato, enBase) {
+  if (!DIAG) return;
+  const li = document.createElement('li');
+  const a = document.createElement('span');
+  a.innerHTML = '<span class="' + (enBase ? 'si' : 'no') + '">' + (enBase ? '✓' : '✗') + '</span> ' + valor;
+  const b = document.createElement('span');
+  b.className = 'fmt'; b.textContent = formato || '?';
+  li.append(a, b);
+  const ol = document.getElementById('diagLista');
+  ol.prepend(li);
+  while (ol.children.length > 12) ol.lastChild.remove();
+}
+if (DIAG) {
+  setInterval(() => {
+    const d = document.getElementById('diagFps');
+    if (d) d.textContent = diagIntentos + ' lecturas/s';
+    diagIntentos = 0;
+  }, 1000);
+}
+
 /* ---------- cámara ---------- */
 let pista = null, lienzo = null, ctx2d = null, zoomActual = 1;
 
@@ -540,6 +610,7 @@ async function abrirCamara() {
 
     const v = $('video'); v.srcObject = flujo; await v.play();
     $('camara').hidden = false; $('btnCamara').textContent = 'Apagar cámara';
+    if (DIAG) $('diag').hidden = false;
     leer();
   } catch (e) {
     mostrar('stop', 'No se pudo abrir la cámara', 'Revisa el permiso de cámara del navegador y vuelve a intentar.');
@@ -585,9 +656,11 @@ async function leer() {
         fuente = lienzo;
       }
       const cs = await detector.detect(fuente);
+      diagTic();
       if (cs.length) {
         const cod = normalizar(cs[0].rawValue), t = Date.now();
-        if (cod.length >= 8 && (cod !== ultimo.cod || t - ultimo.t > 2500)) {
+        diagAnota(cod, cs[0].format, mapa ? mapa.has(cod) : false);
+        if (cod.length >= 8 && (cod !== ultimo.cod || t - ultimo.t > 1200)) {
           ultimo = { cod, t };
           buscar(cod);
         }
