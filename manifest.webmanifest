@@ -1,7 +1,7 @@
 {
   "name": "Bodega Escáner",
   "short_name": "Bodega",
-  "description": "Verificación de envíos en bodega: plazos cumplidos y despacho a domicilio.",
+  "description": "Qué hacer con cada envío de bodega: domicilio, plazo cumplido o pendiente de aviso.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
